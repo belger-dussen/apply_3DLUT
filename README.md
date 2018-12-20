@@ -1,5 +1,5 @@
 # apply_3DLUT
-Apply 3D LUT to Image(s)
+Apply 3D LUT to image(s) using linear interpolation.
 
 ## Dependencies
 Tested with folowing version of libraries:
