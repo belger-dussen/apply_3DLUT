@@ -6,6 +6,7 @@ import numpy as np
 import argparse
 import os
 import glob
+from scipy.interpolate import RegularGridInterpolator
 
 
 def parser():
@@ -20,6 +21,8 @@ def parser():
                         help='lut size (default 64)')
     parser.add_argument('--batch', action='store_true',
                         help='apply batch (default False)')
+    parser.add_argument('--method',  type=str, default=('linear'), choices=['linear', 'nearest'],
+                        help='interpolation methods (defualt linear')
     args = parser.parse_args()
     return args
 
@@ -33,20 +36,16 @@ def load_lut(path):
     return lut
 
 
-def apply_lut(img, lut):
-    h, w = img.shape[:2]
-    idx = np.round((img/255.)*(LUT_SIZE-1)).astype(np.int32)
-    idx *= np.array([1, LUT_SIZE, LUT_SIZE**2])
-    idx = idx.sum(2).reshape(-1)
-    return (lut[idx].reshape(h, w, 3)*255).astype(np.uint8)
-
-
 if __name__ == "__main__":
     args = parser()
     LUT_SIZE = args.lut_size
 
     print('Loading 3DLUT')
     lut = load_lut(args.lut_path)
+
+    x = np.arange(0, 64)
+    interpolation_func = RegularGridInterpolator(
+        (x, x, x), lut.reshape(64, 64, 64, 3), method=args.method)
 
     if args.batch:
         img_paths = glob.glob(args.img_path+'*')
@@ -60,18 +59,21 @@ if __name__ == "__main__":
             continue
         if '_lut' in path:
             continue
-        
+
         if args.save_name is None:
             f_name, ext = os.path.splitext(args.img_path)
             save_name = ''.join([f_name, '_lut', ext])
         else:
             save_name = args.save_name
         if os.path.exists(save_name):
+            print('\nFile already exists: {}'.format(save_name))
+            print('Skipping...')
             continue
 
-        img = np.array(Image.open(path))
-        new_image = apply_lut(img, lut)
-        new_image_pil = Image.fromarray(new_image)
+        img = np.array(Image.open(path))[:, :, ::-1]
+        new_image = np.round(interpolation_func((img/255.*63)))
+        new_image *= 255
+        new_image_pil = Image.fromarray(new_image.astype(np.uint8))
 
         new_image_pil.save(save_name)
     print('')
